@@ -1,1 +1,1 @@
-# business-glossary-semantic-agent
+# bigquery-metrics-appsflyer-ai-agent
