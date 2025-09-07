@@ -1,182 +1,157 @@
 # BigQuery Metrics AppsFlyer AI Agent
 
-An AI-assisted analytics agent that lets you query AppsFlyer performance marketing metrics stored in Google BigQuery using natural language. It translates user questions ("Show installs and ROAS for my top geo last week") into optimized SQL, executes against your curated BigQuery dataset, and returns concise answers, visualizations, and follow‑up insights.
+An AI-powered analytics agent that lets you ask natural language questions about AppsFlyer performance marketing data stored in Google BigQuery. It converts plain English into safe, optimized SQL, executes it, computes standardized growth & monetization metrics (installs, ROAS, retention, revenue cohorts, cost efficiency), and returns structured results with summaries, visualization specs, and suggested follow‑ups.
+
+> Think of it as a conversational analyst for your AppsFlyer + BigQuery data.
 
 ---
-## 🚀 Core Features
-- **Natural Language to SQL**: Convert plain English questions into safe, parameterized BigQuery SQL.
-- **AppsFlyer Marketing Metrics**: Installs, clicks, CVR, retention, revenue, ROAS, cohorts, SKAN (if available), cost metrics (if cost data ingested), and custom events.
-- **Schema-Aware Reasoning**: Dynamically inspects information_schema or a local schema manifest to improve query correctness.
-- **Result Summarization**: LLM-generated plain‑English explanations of query outputs.
-- **Visualization Support**: Returns chart spec suggestions (e.g. JSON for line / bar charts) suitable for frontend rendering.
-- **Follow‑Up Memory**: Maintains conversational context ("Compare that to the previous month") across turns.
-- **Safety Layer**: Query guardrails (deny DDL/DML, rate limit, row caps, cost estimation, token / quota checks).
-- **Extensible Model Backend**: Pluggable providers (OpenAI, Anthropic, Vertex AI, etc.).
+## Table of Contents
+1. Overview
+2. Problem & Why It Matters
+3. Core Features
+4. How It Works (Flow)
+5. Architecture
+6. Data Model & Metrics
+7. Safety & Governance
+8. Quick Start
+9. Example Questions
+10. API Response Shape
+11. Roadmap
+12. Contributing
+13. FAQ
+14. License
 
 ---
-## 🧩 Architecture Overview
+## 1. Overview
+Modern growth and marketing teams constantly ask repetitive data questions: "What is D7 ROAS for Meta vs Google?" "Did installs drop week over week?" "Which campaigns drove the retention lift?" Writing & validating SQL each time is slow and costly. This agent removes friction—turning natural questions into governed, validated, and explainable analytics answers.
+
+## 2. Problem & Why It Matters
+| Challenge | Pain | Impact |
+|-----------|------|--------|
+| Ad-hoc SQL for routine metrics | Repetition & errors | Wasted analyst cycles |
+| Inconsistent metric formulas | Misaligned decisions | Lost budget efficiency |
+| Costly / unbounded warehouse queries | Budget surprises | Reduced trust |
+| Slow iteration on hypotheses | Slower optimization | Lower ROAS / growth |
+| Non-technical stakeholders blocked | Backlogs | Delayed insights |
+
+This project standardizes access, enforces safe patterns, and accelerates decision-making.
+
+## 3. Core Features
+- Natural Language → SQL (schema-aware, parameterized, SELECT-only)
+- AppsFlyer marketing & monetization metrics (installs, cost, revenue, ROAS, retention, cohorts)
+- Conversational context ("compare to last month", "break that down by geo")
+- Guardrails: no DDL/DML, enforced LIMIT, byte-scan estimation, allowlists
+- Post-query insight summarization & suggested follow-ups
+- Visualization spec generation (chart-friendly JSON)
+- Pluggable LLM backend (OpenAI / Anthropic / Vertex / Azure)
+- Extensible metric registry & schema manifest
+
+## 4. How It Works (Flow)
+1. User asks: "Compare D7 ROAS for Meta vs Google last month."  
+2. Intent classification (period_compare + roas_cohort)  
+3. Schema context loaded (table + column manifest)  
+4. LLM drafts SQL (safe template-driven)  
+5. Validation: static rules + SQL parsing + dry-run cost  
+6. BigQuery execution (SELECT-only)  
+7. KPI enrichment (ROAS deltas, rankings)  
+8. Summarization (plain-English narrative)  
+9. Visualization spec assembly  
+10. Response JSON with follow-up suggestions
+
+## 5. Architecture
 ```
-User -> API / Chat UI -> Orchestrator -> (1) Intent + SQL Draft (LLM)
-                                      -> (2) SQL Validator / Guard
-                                      -> (3) BigQuery Runner
-                                      -> (4) Result Post-Processor (metrics enrichment, derived KPIs)
-                                      -> (5) Insight + Visualization Generator (LLM)
-                                      -> Response JSON -> UI Renderer
+User -> Chat/API -> Orchestrator
+  -> Intent + SQL Draft (LLM)
+  -> SQL Validator (rules + AST + cost dry-run)
+  -> BigQuery Runner
+  -> Metrics Post-Processor
+  -> Insight & Visualization Generator (LLM)
+  -> JSON Response -> UI
 ```
-Key modules:
-- `agent/intent.py` – prompt construction & conversation state handling
-- `agent/sql_generator.py` – NL → SQL synthesis
-- `agent/sql_validator.py` – static + rule based safety filters
-- `data/bq_client.py` – BigQuery execution + dry-run cost checks
-- `agent/insights.py` – summarization & follow‑ups
-- `schemas/` – schema manifest or auto‑introspected cache
+Key conceptual modules (adjust to actual code names):
+- intent.py – conversation state & intent classification
+- sql_generator.py – NL → SQL templates
+- sql_validator.py – guardrails & AST safety checks
+- bq_client.py – execution + dry run cost
+- insights.py – summarization, suggestions
+- schemas/ – manifest or auto-introspect cache
 
-(Adjust file names to match actual codebase if they differ.)
+## 6. Data Model & Metrics
+Typical tables (customize to your dataset):
+- installs (install_time, media_source, geo, campaign, platform)
+- attribution_cost (date, media_source, cost, currency)
+- revenue_events (event_time, value, currency, type)
+- raw_events (generic in-app events)
+- skan_installs (optional SKAdNetwork postbacks)
 
----
-## 📦 Data Model & Metrics
-Typical base tables (yours may differ):
-- `raw_events` – in‑app events with event_name, event_time, appsflyer_id, media_source, geo, platform
-- `installs` – install dimension table (install_time, campaign, adset, channel, geo)
-- `attribution_cost` – media cost (media_source, date, cost, currency)
-- `revenue_events` – purchase or ad revenue events (value, currency, event_time)
-- `skan_installs` – SKAdNetwork postbacks (optional)
+Derived metrics:
+- installs, clicks, cvr = installs / clicks
+- revenue_d{n}, roas_d{n} = revenue_d{n} / cost
+- day_n_retention
+- arpu = revenue / active_users
+- share_of_installs = installs / total_installs
 
-Common derived metrics:
-- `installs`, `clicks`, `cvr = installs / clicks`
-- `day_1_retention`, `day_7_retention`
-- `revenue_d{n}` (cohort windows)
-- `roas_d{n} = revenue_d{n} / cost`
-- `arpu = revenue / active_users`
+## 7. Safety & Governance
+| Guardrail | Description |
+|-----------|-------------|
+| SELECT-only | Reject DDL/DML (DROP, UPDATE, INSERT, etc.) |
+| LIMIT enforcement | Auto-inject configurable LIMIT if missing |
+| Wildcard control | Discourage SELECT *; use explicit columns |
+| Cost estimation | BigQuery dry run bytes threshold |
+| Column allowlist | Avoid leaking PII or unapproved fields |
+| Audit log (optional) | Log question, SQL, bytes, latency |
+| Metric registry | Single source of truth for formulas |
 
-Add / adjust according to your actual dataset.
+## 8. Quick Start
+Prerequisites: GCP project, BigQuery dataset with AppsFlyer exports, Python 3.10+, LLM API key.
 
----
-## 🔐 Prerequisites
-1. A Google Cloud project with BigQuery enabled
-2. AppsFlyer data exported / ingested into BigQuery (via Data Locker / ETL)
-3. Python 3.10+ (or specified runtime)
-4. An LLM provider API key (OpenAI / Anthropic / Vertex / etc.)
-5. (Optional) Frontend container / Next.js / Streamlit app for chat UI
-
----
-## ⚙️ Environment Variables
-Create a `.env` (never commit secrets):
+Environment (.env example):
 ```
 GCP_PROJECT_ID=your-gcp-project
 BQ_DATASET=marketing_analytics
-# If using a service account json path:
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa.json
-
-# AppsFlyer / data integration
-APPSFLYER_APP_ID=yourappID
-APPSFLYER_API_TOKEN=xxxxx
-
-# LLM configuration
-MODEL_PROVIDER=openai            # openai | anthropic | vertex | azure_openai
-MODEL_NAME=gpt-4o-mini           # or claude-3-5-sonnet, etc.
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service_account.json
+MODEL_PROVIDER=openai
+MODEL_NAME=gpt-4o-mini
 OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=...
-VERTEX_LOCATION=us-central1
-VERTEX_MODEL=projects/xxx/locations/us-central1/models/xxx
-
-# Safety / limits
 MAX_ROWS=5000
 QUERY_TIMEOUT_SECONDS=60
 ALLOW_UNSAFE_SQL=false
 ```
 
----
-## 🛠️ Local Development
-1. Clone repo:
-   ```bash
-   git clone https://github.com/rivka14/bigquery-metrics-appsflyer-ai-agent.git
-   cd bigquery-metrics-appsflyer-ai-agent
-   ```
-2. Create & activate virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Windows: .venv\Scripts\activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Copy example env & edit:
-   ```bash
-   cp .env.example .env
-   ```
-5. Run dev server / CLI (example):
-   ```bash
-   python -m app.main
-   ```
-
----
-## 🧪 Testing
+Local setup:
+```bash
+git clone https://github.com/rivka14/bigquery-metrics-appsflyer-ai-agent.git
+cd bigquery-metrics-appsflyer-ai-agent
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env  # if provided; else create manually
+python -m app.main  # or your entrypoint
+```
+Testing (adjust if tests exist):
 ```bash
 pytest -q
 ```
-Recommended: include unit tests for
-- SQL generation prompt functions
-- Safety validator edge cases
-- Metrics post-processing correctness
 
----
-## 🗣️ Example Queries
-| User Question | Generated Intent | Example SQL Sketch |
-|---------------|------------------|--------------------|
-| Install and revenue by media source last 7 days | timeseries_comparison | SELECT date, media_source, COUNT(*) installs, SUM(revenue) revenue ... |
-| What was D7 ROAS for Facebook campaigns in August? | cohort_roas | (cohort revenue join cost) |
-| Compare ROAS this week vs previous week | period_compare | Two CTEs + diff % |
-| Top 5 geos by installs yesterday | ranking | ORDER BY installs DESC LIMIT 5 |
+## 9. Example Questions
+| Natural Question | Intent Pattern | Notes |
+|------------------|---------------|-------|
+| Installs and revenue by media source last 7 days | timeseries_comparison | Daily granularity |
+| D7 ROAS for Facebook campaigns in August | cohort_roas | Date filter + campaign slice |
+| Compare ROAS this week vs previous week | period_compare | Two windows diff |
+| Top 5 geos by installs yesterday | ranking | Limit & ordering |
+| Show D1 and D7 retention by platform for July installs | retention_cohort | Cohort expansion |
 
----
-## 🧠 Prompt / Guardrail Strategy
-- System prompt enumerates allowed metrics & tables.
-- Few-shot examples for each query archetype (timeseries, ranking, cohort, retention, roas, funnel).
-- Post-LMM regex + SQL AST parse (e.g., sqlglot) to confirm only SELECT, no wildcards, row limit enforced.
-- Dry‑run BigQuery to estimate bytes; abort if exceeding threshold.
-
----
-## 🪪 Security & Compliance
-- Principle of least privilege: service account limited to SELECT on curated dataset.
-- Secrets loaded from environment / secret manager, never embedded in prompts.
-- Optional: per-user audit log of natural question, SQL, execution stats, cost.
-- PII handling: redact user identifiers unless essential.
-
----
-## 🚀 Deployment
-Options:
-1. Cloud Run (Docker)
-2. Vertex AI Model Garden + Functions for serverless orchestration
-3. FastAPI / Uvicorn on GCE or managed K8s (GKE)
-
-Example (Cloud Run):
-```bash
-gcloud builds submit --tag gcr.io/$GCP_PROJECT_ID/af-metrics-agent:$(git rev-parse --short HEAD)
-gcloud run deploy af-metrics-agent \
-  --image gcr.io/$GCP_PROJECT_ID/af-metrics-agent:$(git rev-parse --short HEAD) \
-  --region=us-central1 --platform=managed \
-  --allow-unauthenticated
-```
-Configure env vars in Cloud Run console or use `--set-env-vars`.
-
----
-## 📤 API Response Shape (Example)
+## 10. API Response Shape (Example)
 ```json
 {
   "query_id": "2025-09-07T20:45:00Z_fb1a",
   "user_question": "Show installs and revenue by media source last 7 days",
   "generated_sql": "SELECT ... LIMIT 5000",
   "bytes_processed": 12345678,
-  "rows": [...],
+  "rows": [ {"date":"2025-09-01","media_source":"meta","installs":1234,"revenue":456.78} ],
   "summary": "Meta and Google drove 78% of installs; Meta ROAS higher (+12%).",
-  "chart": {
-    "type": "line",
-    "x": "date",
-    "series": ["installs", "revenue"],
-    "group": "media_source"
-  },
+  "chart": { "type": "line", "x": "date", "group": "media_source", "series": ["installs","revenue"] },
   "follow_up_suggestions": [
     "Break down Meta installs by campaign",
     "Show D7 ROAS instead of revenue",
@@ -185,39 +160,47 @@ Configure env vars in Cloud Run console or use `--set-env-vars`.
 }
 ```
 
----
-## 🧭 Roadmap
-- [ ] Add semantic layer / metric definitions (dbt or YAML)
-- [ ] Add caching layer for repeated queries
-- [ ] Add cost anomaly alerts (spend spike detection)
-- [ ] Support SKAN conversion value decoding
-- [ ] Add RAG over internal analytics documentation
-- [ ] Add streaming token responses
-- [ ] Add user-level permission / RBAC
+## 11. Roadmap
+- [ ] Semantic metric layer (dbt metrics / YAML registry)
+- [ ] Query result caching & materialized aggregates
+- [ ] Spend anomaly detection alerts
+- [ ] SKAN conversion value decoding support
+- [ ] RAG over internal documentation / naming conventions
+- [ ] Slack / Teams bot integration
+- [ ] Role-based metric access (RBAC)
+- [ ] Streaming partial responses
+
+## 12. Contributing
+1. Fork & create feature branch
+2. Add or update tests
+3. Ensure linting / formatting passes
+4. Open PR with clear description & screenshots (if UI)
+
+## 13. FAQ
+Q: Why not just use a BI dashboard?  
+A: Dashboards are great for predefined views; this agent shines for fast exploratory and comparative questions without manual SQL.
+
+Q: How do you prevent runaway costs?  
+A: Dry-run byte scan thresholds + enforced LIMIT + optional caching.
+
+Q: Can I swap the LLM provider?  
+A: Yes—abstracted provider interface; set MODEL_PROVIDER + MODEL_NAME.
+
+Q: How are metrics standardized?  
+A: (Planned) Central metric registry / semantic layer ensures formula consistency.
+
+Q: Does it support SKAN?  
+A: Yes, if you provide a skan_installs-like table; logic can extend to incremental postback decoding.
+
+## 14. License
+(Choose a license—MIT, Apache 2.0, etc.)
 
 ---
-## 🤝 Contributing
-1. Fork the repo & create a feature branch.
-2. Write clear commit messages.
-3. Add / update tests where appropriate.
-4. Open a PR with description, screenshots (if UI), and checklist.
+### Next Steps / TODO After Cloning
+- Replace placeholder module names with actual file paths
+- Add a LICENSE file
+- Create tests for SQL guardrails & metric computations
+- Add a schema manifest example (schemas/manifest.yaml)
 
 ---
-## 📄 License
-Choose a license (MIT, Apache 2.0, etc.). Example:
-```
-MIT License – see LICENSE file (to be added).
-```
-
----
-## 🙋 Support / Questions
-Open an issue or start a discussion. Feel free to suggest new metric templates or safety improvements.
-
----
-## ⭐ Acknowledgements
-- AppsFlyer for the marketing analytics ecosystem
-- Google BigQuery for scalable analytics
-- Open-source LLM / prompt tooling community
-
----
-**Next Step:** Replace placeholders with your actual file/module names & add a LICENSE.
+Feel free to request a lighter business-friendly summary or a diagram (Mermaid) and I can add it here.
