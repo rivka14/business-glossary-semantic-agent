@@ -16,10 +16,6 @@ An AI-powered analytics agent that lets you ask natural language questions about
 8. Quick Start
 9. Example Questions
 10. API Response Shape
-11. Roadmap
-12. Contributing
-13. FAQ
-14. License
 
 ---
 ## 1. Overview
