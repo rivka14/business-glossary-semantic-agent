@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bigquery-metrics-appsflyer-ai-agent"
+version = "1.0.0"
+description = "AI-powered analytics agent for AppsFlyer marketing data in BigQuery"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "BigQuery Metrics AppsFlyer AI Agent Team"}
+]
+keywords = [
+    "bigquery",
+    "appsflyer", 
+    "ai-agent",
+    "analytics",
+    "mobile-marketing",
+    "sql-generation",
+    "natural-language",
+    "data-analysis",
+    "metrics",
+    "roas",
+    "retention",
+    "mobile-attribution"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Database :: Database Engines/Servers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "google-adk==1.5.0",
+    "google-cloud-bigquery==3.34.0",
+    "pandas==2.3.0",
+    "db-dtypes==1.1.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/rivka14/bigquery-metrics-appsflyer-ai-agent"
+Repository = "https://github.com/rivka14/bigquery-metrics-appsflyer-ai-agent"
+"Bug Reports" = "https://github.com/rivka14/bigquery-metrics-appsflyer-ai-agent/issues"
+Documentation = "https://github.com/rivka14/bigquery-metrics-appsflyer-ai-agent/blob/main/README.md"
+
+[tool.setuptools]
+packages = ["appsflyer_metrics_sub_agent", "bigquery_analyst_sub_agent", "mannger_agent"]
